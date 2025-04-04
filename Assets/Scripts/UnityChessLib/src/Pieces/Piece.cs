@@ -1,8 +1,9 @@
 ﻿using System.Collections.Generic;
 
 namespace UnityChess {
-	/// <summary>Base class for any chess piece.</summary>
-	public abstract class Piece {
+    /// <summary>Base class for any chess piece.</summary>
+    [System.Serializable]
+    public abstract class Piece {
 		public Side Owner { get; protected set; }
 
 		protected Piece(Side owner) {

@@ -10,7 +10,7 @@ using UnityEngine;
 /// special moves handling (such as castling, en passant, and promotion), and game reset.
 /// Inherits from a singleton base class to ensure a single instance throughout the application.
 /// </summary>
-public class GameManager : MonoBehaviourSingleton<GameManager> {
+public class GameManager : NetworkBehaviourSingleton<GameManager> {
 	// Events signalling various game state changes.
 	public static event Action NewGameStartedEvent;
 	public static event Action GameEndedEvent;
@@ -186,7 +186,8 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 		// If the latest move resulted in checkmate or stalemate, disable further moves.
 		if (latestHalfMove.CausedCheckmate || latestHalfMove.CausedStalemate) {
 			BoardManager.Instance.SetActiveAllPieces(false);
-			GameEndedEvent?.Invoke();
+            AnalyticsManager.Instance.GameEndedLogging();
+            GameEndedEvent?.Invoke();
 		} else {
 			// Otherwise, ensure that only the pieces of the side to move are enabled.
 			BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(SideToMove);
@@ -329,13 +330,18 @@ public class GameManager : MonoBehaviourSingleton<GameManager> {
 			movedPieceTransform.position = closestBoardSquareTransform.position;
 		}
 	}
-	
-	/// <summary>
-	/// Determines whether the specified piece has any legal moves.
-	/// </summary>
-	/// <param name="piece">The chess piece to evaluate.</param>
-	/// <returns>True if the piece has at least one legal move; otherwise, false.</returns>
-	public bool HasLegalMoves(Piece piece) {
+
+    public bool TryGetLegalMove(Square fromSquare, Square toSquare, out Movement move)
+    {
+        return game.TryGetLegalMove(fromSquare, toSquare, out move);
+    }
+
+    /// <summary>
+    /// Determines whether the specified piece has any legal moves.
+    /// </summary>
+    /// <param name="piece">The chess piece to evaluate.</param>
+    /// <returns>True if the piece has at least one legal move; otherwise, false.</returns>
+    public bool HasLegalMoves(Piece piece) {
 		return game.TryGetLegalMovesForPiece(piece, out _);
 	}
 }

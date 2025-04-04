@@ -2,82 +2,102 @@
 using System.Collections.Generic;
 using UnityChess;
 using UnityEngine;
+using Unity.Netcode;
 using static UnityChess.SquareUtil;
 
 /// <summary>
 /// Manages the visual representation of the chess board and piece placement.
 /// Inherits from MonoBehaviourSingleton to ensure only one instance exists.
 /// </summary>
-public class BoardManager : MonoBehaviourSingleton<BoardManager> {
+public class BoardManager : NetworkBehaviourSingleton<BoardManager> {
 	// Array holding references to all square GameObjects (64 squares for an 8x8 board).
 	private readonly GameObject[] allSquaresGO = new GameObject[64];
 	// Dictionary mapping board squares to their corresponding GameObjects.
 	private Dictionary<Square, GameObject> positionMap;
 	// Constant representing the side length of the board plane (from centre to centre of corner squares).
 	private const float BoardPlaneSideLength = 14f; // measured from corner square centre to corner square centre, on same side.
-	// Half the side length, for convenience.
+													// Half the side length, for convenience.
 	private const float BoardPlaneSideHalfLength = BoardPlaneSideLength * 0.5f;
 	// The vertical offset for placing the board (height above the base).
 	private const float BoardHeight = 1.6f;
 
-	/// <summary>
-	/// Awake is called when the script instance is being loaded.
-	/// Sets up the board, subscribes to game events, and creates the square GameObjects.
-	/// </summary>
-	private void Awake() {
-		// Subscribe to game events to update the board when a new game starts or when the game is reset.
-		GameManager.NewGameStartedEvent += OnNewGameStarted;
-		GameManager.GameResetToHalfMoveEvent += OnGameResetToHalfMove;
-		
-		// Initialise the dictionary to map board squares to GameObjects.
-		positionMap = new Dictionary<Square, GameObject>(64);
-		// Get the transform of the board.
-		Transform boardTransform = transform;
-		// Store the board's position.
-		Vector3 boardPosition = boardTransform.position;
-		
-		// Loop over files (columns) and ranks (rows) to create each square.
-		for (int file = 1; file <= 8; file++) {
-			for (int rank = 1; rank <= 8; rank++) {
-				// Create a new GameObject for the square with its name based on chess notation.
-				GameObject squareGO = new GameObject(SquareToString(file, rank)) {
-					// Set the position of the square relative to the board's position.
-					transform = {
-						position = new Vector3(
-							boardPosition.x + FileOrRankToSidePosition(file),
-							boardPosition.y + BoardHeight,
-							boardPosition.z + FileOrRankToSidePosition(rank)
-						),
-						parent = boardTransform // Make the square a child of the board.
-					},
-					// Tag the GameObject as "Square" for identification.
-					tag = "Square"
-				};
+	private NetworkVariable<GameState> networkGameState = new NetworkVariable<GameState>(
+		new GameState(),
+		NetworkVariableReadPermission.Everyone,
+		NetworkVariableWritePermission.Server);
 
-				// Add the square and its GameObject to the position map.
-				positionMap.Add(new Square(file, rank), squareGO);
-				// Store the square GameObject in the array at the corresponding index.
-				allSquaresGO[(file - 1) * 8 + (rank - 1)] = squareGO;
-			}
-		}
-	}
+    /// <summary>
+    /// Awake is called when the script instance is being loaded.
+    /// Sets up the board, subscribes to game events, and creates the square GameObjects.
+    /// </summary>
+    public override void OnNetworkSpawn() {
+		base.OnNetworkSpawn();
 
-	/// <summary>
-	/// Called when a new game is started.
-	/// Clears the board and places pieces according to the new game state.
-	/// </summary>
-	private void OnNewGameStarted() {
-		// Remove all existing visual pieces.
-		ClearBoard();
+        // Initialise the dictionary to map board squares to GameObjects.
+        positionMap = new Dictionary<Square, GameObject>(64);
+        // Get the transform of the board.
+        Transform boardTransform = transform;
+        // Store the board's position.
+        Vector3 boardPosition = boardTransform.position;
+
+        // Loop over files (columns) and ranks (rows) to create each square.
+        for (int file = 1; file <= 8; file++)
+        {
+            for (int rank = 1; rank <= 8; rank++)
+            {
+				// Find the square's GameObject from the Board prefab.
+                GameObject squareGO = GameObject.Find(SquareToString(file, rank));
+                // Add the square and its GameObject to the position map.
+                positionMap.Add(new Square(file, rank), squareGO);
+                // Store the square GameObject in the array at the corresponding index.
+                allSquaresGO[(file - 1) * 8 + (rank - 1)] = squareGO;
+            }
+        }
+
+        if (IsServer)
+		{
+            // Subscribe to game events to update the board when a new game starts or when the game is reset.
+            GameManager.NewGameStartedEvent += OnNewGameStarted;
+            GameManager.GameResetToHalfMoveEvent += OnGameResetToHalfMove;
+            networkGameState.OnValueChanged += OnGameStateChanged;
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+
+        if (IsServer)
+        {
+            GameManager.NewGameStartedEvent -= OnNewGameStarted;
+            GameManager.GameResetToHalfMoveEvent -= OnGameResetToHalfMove;
+            networkGameState.OnValueChanged -= OnGameStateChanged;
+        }
+    }
+
+    /// <summary>
+    /// Called when a new game is started.
+    /// Clears the board and places pieces according to the new game state.
+    /// </summary>
+    private void OnNewGameStarted() {
+        if (!IsServer) return;
+
+		AnalyticsManager.Instance.GameStartedLogging();
+
+        // Remove all existing visual pieces.
+        ClearBoard();
 		
 		// Iterate through all current pieces and create their GameObjects at the correct positions.
 		foreach ((Square square, Piece piece) in GameManager.Instance.CurrentPieces) {
 			CreateAndPlacePieceGO(piece, square);
 		}
 
-		// Enable only the pieces that belong to the side whose turn it is.
-		EnsureOnlyPiecesOfSideAreEnabled(GameManager.Instance.SideToMove);
-	}
+        // Update the network variable to notify clients
+        GameState newState = networkGameState.Value;
+        newState.SideToMove = GameManager.Instance.SideToMove;
+        newState.GameEnded = false;
+        networkGameState.Value = newState;
+    }
 
 	/// <summary>
 	/// Called when the game is reset to a specific half-move.
@@ -96,19 +116,36 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager> {
 		GameManager.Instance.HalfMoveTimeline.TryGetCurrent(out HalfMove latestHalfMove);
 		// If the game ended by checkmate or stalemate, disable all pieces.
 		if (latestHalfMove.CausedCheckmate || latestHalfMove.CausedStalemate)
+		{
 			SetActiveAllPieces(false);
+		}
 		else
+		{
 			// Otherwise, enable only the pieces for the side that is to move.
 			EnsureOnlyPiecesOfSideAreEnabled(GameManager.Instance.SideToMove);
+		}
 	}
 
-	/// <summary>
-	/// Handles the castling of a rook.
-	/// Moves the rook from its original position to its new position.
-	/// </summary>
-	/// <param name="rookPosition">The starting square of the rook.</param>
-	/// <param name="endSquare">The destination square for the rook.</param>
-	public void CastleRook(Square rookPosition, Square endSquare) {
+    private void OnGameStateChanged(GameState previousValue, GameState newValue)
+    {
+        // Update the visual board based on the new game state
+        if (newValue.GameEnded)
+        {
+            SetActiveAllPieces(false);
+        }
+        else
+        {
+            EnsureOnlyPiecesOfSideAreEnabled(newValue.SideToMove);
+        }
+    }
+
+    /// <summary>
+    /// Handles the castling of a rook.
+    /// Moves the rook from its original position to its new position.
+    /// </summary>
+    /// <param name="rookPosition">The starting square of the rook.</param>
+    /// <param name="endSquare">The destination square for the rook.</param>
+    public void CastleRook(Square rookPosition, Square endSquare) {
 		// Retrieve the rook's GameObject.
 		GameObject rookGO = GetPieceGOAtPosition(rookPosition);
 		// Set the rook's parent to the destination square's GameObject.
@@ -130,7 +167,14 @@ public class BoardManager : MonoBehaviourSingleton<BoardManager> {
 			Resources.Load("PieceSets/Marble/" + modelName) as GameObject,
 			positionMap[position].transform
 		);
-	}
+
+		if (IsServer && pieceGO.GetComponent<NetworkObject>() != null)
+		{
+			NetworkObject pieceNetworkObject = pieceGO.GetComponent<NetworkObject>();
+			pieceNetworkObject.Spawn();
+			pieceGO.transform.parent = positionMap[position].transform;
+		}
+    }
 
 	/// <summary>
 	/// Retrieves all square GameObjects within a specified radius of a world-space position.
