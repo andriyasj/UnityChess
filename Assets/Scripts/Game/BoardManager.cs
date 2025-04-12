@@ -126,6 +126,14 @@ public class BoardManager : NetworkBehaviourSingleton<BoardManager> {
 		}
 	}
 
+    // Method to update the network game state
+    public void UpdateNetworkGameState(GameState newState)
+    {
+        if (!IsServer) return;
+
+        networkGameState.Value = newState;
+    }
+
     private void OnGameStateChanged(GameState previousValue, GameState newValue)
     {
         // Update the visual board based on the new game state
@@ -154,35 +162,36 @@ public class BoardManager : NetworkBehaviourSingleton<BoardManager> {
 		rookGO.transform.localPosition = Vector3.zero;
 	}
 
-	/// <summary>
-	/// Instantiates and places the visual representation of a piece on the board.
-	/// </summary>
-	/// <param name="piece">The chess piece to display.</param>
-	/// <param name="position">The board square where the piece should be placed.</param>
-	public void CreateAndPlacePieceGO(Piece piece, Square position) {
-		// Construct the model name based on the piece's owner and type.
-		string modelName = $"{piece.Owner} {piece.GetType().Name}";
-		// Instantiate the piece GameObject from the corresponding resource.
-		GameObject pieceGO = Instantiate(
-			Resources.Load("PieceSets/Marble/" + modelName) as GameObject,
-			positionMap[position].transform
-		);
+    /// <summary>
+    /// Instantiates and places the visual representation of a piece on the board.
+    /// </summary>
+    /// <param name="piece">The chess piece to display.</param>
+    /// <param name="position">The board square where the piece should be placed.</param>
+    public void CreateAndPlacePieceGO(Piece piece, Square position)
+    {
+        string modelName = $"{piece.Owner} {piece.GetType().Name}";
+        GameObject pieceGO = Instantiate(
+            Resources.Load("PieceSets/Marble/" + modelName) as GameObject,
+            positionMap[position].transform
+        );
 
-		if (IsServer && pieceGO.GetComponent<NetworkObject>() != null)
-		{
-			NetworkObject pieceNetworkObject = pieceGO.GetComponent<NetworkObject>();
-			pieceNetworkObject.Spawn();
-			pieceGO.transform.parent = positionMap[position].transform;
-		}
+        if (IsServer && pieceGO.GetComponent<NetworkObject>() != null)
+        {
+            NetworkObject pieceNetworkObject = pieceGO.GetComponent<NetworkObject>();
+            pieceNetworkObject.Spawn();
+        }
+
+        pieceGO.transform.parent = positionMap[position].transform;
+        pieceGO.transform.localPosition = Vector3.zero;
     }
 
-	/// <summary>
-	/// Retrieves all square GameObjects within a specified radius of a world-space position.
-	/// </summary>
-	/// <param name="squareGOs">A list to be populated with the found square GameObjects.</param>
-	/// <param name="positionWS">The world-space position to check around.</param>
-	/// <param name="radius">The radius within which to search.</param>
-	public void GetSquareGOsWithinRadius(List<GameObject> squareGOs, Vector3 positionWS, float radius) {
+    /// <summary>
+    /// Retrieves all square GameObjects within a specified radius of a world-space position.
+    /// </summary>
+    /// <param name="squareGOs">A list to be populated with the found square GameObjects.</param>
+    /// <param name="positionWS">The world-space position to check around.</param>
+    /// <param name="radius">The radius within which to search.</param>
+    public void GetSquareGOsWithinRadius(List<GameObject> squareGOs, Vector3 positionWS, float radius) {
 		// Compute the square of the radius for efficiency.
 		float radiusSqr = radius * radius;
 		// Iterate over all square GameObjects.
@@ -261,7 +270,7 @@ public class BoardManager : NetworkBehaviourSingleton<BoardManager> {
 	/// <summary>
 	/// Clears all visual pieces from the board.
 	/// </summary>
-	private void ClearBoard() {
+	public void ClearBoard() {
 		// Retrieve all VisualPiece components in child objects.
 		VisualPiece[] visualPiece = GetComponentsInChildren<VisualPiece>(true);
 		// Destroy each VisualPiece GameObject immediately.
@@ -277,4 +286,5 @@ public class BoardManager : NetworkBehaviourSingleton<BoardManager> {
 	/// <returns>The corresponding square GameObject.</returns>
 	public GameObject GetSquareGOByPosition(Square position) =>
 		Array.Find(allSquaresGO, go => go.name == SquareToString(position));
+
 }

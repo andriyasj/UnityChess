@@ -1,11 +1,14 @@
 using Firebase.Auth;
 using Firebase.Extensions;
 using Firebase.Firestore;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using TMPro;
+using UnityChess;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
@@ -36,7 +39,6 @@ public class ShopManager : MonoBehaviourSingleton<ShopManager>
 
     private void Start()
     {
-        // If userId is not set in inspector, get it from auth
         if (string.IsNullOrEmpty(userId) && auth.CurrentUser != null)
         {
             userId = auth.CurrentUser.UserId;
@@ -80,7 +82,6 @@ public class ShopManager : MonoBehaviourSingleton<ShopManager>
 
     private void LoadShopIcons()
     {
-        // Load shop items from Firebase
         db.Collection("profileicons").GetSnapshotAsync().ContinueWithOnMainThread(task =>
         {
             if (task.IsCompleted)
@@ -105,7 +106,6 @@ public class ShopManager : MonoBehaviourSingleton<ShopManager>
                             item.SetCost(cost);
                             item.imageUrl = imageUrl;
 
-                            // Load the image
                             StartCoroutine(DownloadIcon(imageUrl, item.itemImage));
                         }
                     }
@@ -396,6 +396,79 @@ public class ShopManager : MonoBehaviourSingleton<ShopManager>
         if (purchaseListener != null)
         {
             purchaseListener.Stop();
+        }
+    }
+
+    public void OnSaveButtonClicked()
+    {
+        string gameID = $"chess_game_{DateTime.Now.Ticks}";
+        GameManager.Instance.SaveGameStateServerRpc(gameID);
+        UIManager.Instance.UpdateGameStringInputField(gameID);
+    }
+        
+
+    public async Task<bool> SaveGameState(string gameId, string serializedGame, Side currentTurn)
+    {
+        try
+        {
+            DocumentReference gameRef = db.Collection("games").Document(gameId);
+            Dictionary<string, object> gameData = new Dictionary<string, object>
+            {
+                { "serializedGame", serializedGame },
+                { "currentTurn", currentTurn.ToString() },
+                { "lastUpdated", Timestamp.GetCurrentTimestamp() }
+            };
+
+            await gameRef.SetAsync(gameData);
+            Debug.Log("Game saved successfully to Firestore");
+            return true;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error saving game: {e.Message}");
+            return false;
+        }
+    }
+
+    public async Task<(string serializedGame, Side currentTurn)> LoadGameState(string gameId)
+    {
+        try
+        {
+            DocumentReference gameRef = db.Collection("games").Document(gameId);
+            DocumentSnapshot snapshot = await gameRef.GetSnapshotAsync();
+
+            if (snapshot.Exists)
+            {
+                Dictionary<string, object> gameData = snapshot.ToDictionary();
+
+                // Debug logs for inspection
+                Debug.Log($"Document data: {string.Join(", ", gameData.Select(kvp => $"{kvp.Key}: {kvp.Value}"))}");
+
+                if (gameData.TryGetValue("serializedGame", out object serializedGameObj) &&
+                    gameData.TryGetValue("currentTurn", out object currentTurnObj))
+                {
+                    string serializedGame = serializedGameObj.ToString();
+                    Side currentTurn = (Side)Enum.Parse(typeof(Side), currentTurnObj.ToString());
+
+                    Debug.Log($"Loaded serializedGame: {serializedGame}, currentTurn: {currentTurn}");
+                    return (serializedGame, currentTurn);
+                }
+                else
+                {
+                    Debug.LogError("Missing required fields in Firestore document.");
+                    return (null, Side.White);
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"Document with ID {gameId} does not exist.");
+                return (null, Side.White);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error loading game: {e.Message}");
+            return (null, Side.White);
         }
     }
 }

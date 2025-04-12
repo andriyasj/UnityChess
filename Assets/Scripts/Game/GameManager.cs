@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Unity.Netcode;
 using UnityChess;
 using UnityEngine;
 
@@ -16,11 +17,11 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
 	public static event Action GameEndedEvent;
 	public static event Action GameResetToHalfMoveEvent;
 	public static event Action MoveExecutedEvent;
-	
-	/// <summary>
-	/// Gets the current board state from the game.
-	/// </summary>
-	public Board CurrentBoard {
+
+    /// <summary>
+    /// Gets the current board state from the game.
+    /// </summary>
+    public Board CurrentBoard {
 		get {
 			// Attempts to retrieve the current board from the board timeline.
 			game.BoardTimeline.TryGetCurrent(out Board currentBoard);
@@ -344,4 +345,91 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
     public bool HasLegalMoves(Piece piece) {
 		return game.TryGetLegalMovesForPiece(piece, out _);
 	}
+
+    [ServerRpc]
+    public void SaveGameStateServerRpc(string gameId)
+    {
+        if (!IsServer) return;
+
+        string serializedGame = SerializeGame();
+
+        // Use the ShopManager to save the game state
+        ShopManager.Instance.SaveGameState(gameId, serializedGame, SideToMove)
+            .ContinueWith(task => {
+                if (task.Result)
+                {
+                    Debug.Log($"Game {gameId} saved successfully");
+                    GameSavedClientRpc(gameId);
+                }
+                else
+                {
+                    Debug.LogError($"Failed to save game {gameId}");
+                }
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    [ClientRpc]
+    private void GameSavedClientRpc(string gameId)
+    {
+        Debug.Log($"Game {gameId} was saved to the server");
+    }
+
+    // Load a game state from Firebase
+    [ServerRpc]
+    public void LoadGameStateServerRpc(string gameId)
+    {
+        if (!IsServer) return;
+
+        ShopManager.Instance.LoadGameState(gameId)
+            .ContinueWith(task =>
+            {
+                if (task.Result.serializedGame != null)
+                {
+                    try
+                    {
+                        // Load the serialized game state
+                        LoadGame(task.Result.serializedGame);
+
+                        // Update board visuals
+                        UpdateBoardVisuals();
+
+                        // Update network state
+                        GameState newState = new GameState
+                        {
+                            SideToMove = task.Result.currentTurn,
+                            GameEnded = false
+                        };
+                        BoardManager.Instance.UpdateNetworkGameState(newState);
+
+                        // Notify clients
+                        GameLoadedClientRpc(gameId);
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Failed to apply loaded game state: {e.Message}");
+                    }
+                }
+                else
+                {
+                    Debug.LogError($"Failed to load game {gameId}: Serialized data is null.");
+                }
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    private void UpdateBoardVisuals()
+    {
+        BoardManager.Instance.ClearBoard();
+        foreach ((Square square, Piece piece) in CurrentPieces)
+        {
+            BoardManager.Instance.CreateAndPlacePieceGO(piece, square);
+        }
+        BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(SideToMove);
+    }
+
+    [ClientRpc]
+    private void GameLoadedClientRpc(string gameId)
+    {
+        Debug.Log($"Game {gameId} was loaded from the server");
+        UpdateBoardVisuals();
+    }
 }

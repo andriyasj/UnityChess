@@ -93,7 +93,7 @@ public class VisualPiece : NetworkBehaviour
         }
     }
 
-    [ServerRpc(RequireOwnership = false)]
+    [ServerRpc]
     private void MovePieceServerRpc()
     {
         // Clear any previous potential landing square candidates.

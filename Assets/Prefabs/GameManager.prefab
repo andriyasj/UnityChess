@@ -48,7 +48,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 241803167e25d0b499c5296fdf571029, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  players: 
   unityChessDebug: {fileID: 608673176574255946}
 --- !u!114 &2776808313089529759
 MonoBehaviour:
@@ -92,7 +91,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1488318648, guid: 83c7966038655f8408d2785254c8ed6b, type: 3}
       propertyPath: m_Size
-      value: 0.038667798
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1488318648, guid: 83c7966038655f8408d2785254c8ed6b, type: 3}
       propertyPath: m_Value
@@ -242,6 +241,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_AnchoredPosition.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3470043843292831248, guid: 83c7966038655f8408d2785254c8ed6b,
+        type: 3}
+      propertyPath: m_Text
+      value: Enter Game ID
       objectReference: {fileID: 0}
     - target: {fileID: 3515911448610232488, guid: 83c7966038655f8408d2785254c8ed6b,
         type: 3}
@@ -778,6 +782,7 @@ PrefabInstance:
     - {fileID: 866424012871018699, guid: 83c7966038655f8408d2785254c8ed6b, type: 3}
     - {fileID: 5281013357309447389, guid: 83c7966038655f8408d2785254c8ed6b, type: 3}
     - {fileID: 347750283195604247, guid: 83c7966038655f8408d2785254c8ed6b, type: 3}
+    - {fileID: 6158984370908353448, guid: 83c7966038655f8408d2785254c8ed6b, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

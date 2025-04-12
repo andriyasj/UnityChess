@@ -73,7 +73,7 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// </summary>
 	private void OnNewGameStarted() {
 		// Update the serialized game string input field.
-		UpdateGameStringInputField();
+		//UpdateGameStringInputField();
 		// Validate turn indicator images.
 		ValidateIndicators();
 		
@@ -114,7 +114,7 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// </summary>
 	private void OnMoveExecuted() {
 		// Update the serialized game string input field.
-		UpdateGameStringInputField();
+		//UpdateGameStringInputField();
 		// Get the side that is now to move.
 		Side sideToMove = GameManager.Instance.SideToMove;
 		// Enable the appropriate turn indicator.
@@ -132,7 +132,7 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// </summary>
 	private void OnGameResetToHalfMove() {
 		// Update the serialized game string input field.
-		UpdateGameStringInputField();
+		//UpdateGameStringInputField();
 		// Set the timeline's head index to the current full move number.
 		moveUITimeline.HeadIndex = GameManager.Instance.LatestHalfMoveIndex / 2;
 		// Validate the turn indicators.
@@ -175,11 +175,11 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// Starts a new game by invoking the corresponding method in GameManager.
 	/// </summary>
 	public void StartNewGame() => GameManager.Instance.StartNewGame();
-	
+
 	/// <summary>
 	/// Loads a game from the text entered in the game string input field.
 	/// </summary>
-	public void LoadGame() => GameManager.Instance.LoadGame(GameStringInputField.text);
+	public void LoadGame() => GameManager.Instance.LoadGameStateServerRpc(GameStringInputField.text);
 
 	/// <summary>
 	/// Adds a new move to the move history UI based on the latest half-move.
@@ -291,5 +291,5 @@ public class UIManager : MonoBehaviourSingleton<UIManager> {
 	/// <summary>
 	/// Updates the game string input field with the current serialized game state.
 	/// </summary>
-	private void UpdateGameStringInputField() => GameStringInputField.text = GameManager.Instance.SerializeGame();
+	public void UpdateGameStringInputField(string gameID) => GameStringInputField.text = gameID;
 }
