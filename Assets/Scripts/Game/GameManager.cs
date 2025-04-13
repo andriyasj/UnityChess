@@ -104,11 +104,22 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
 	private Dictionary<GameSerializationType, IGameSerializer> serializersByType;
 	// Currently selected serialization type (default is FEN).
 	private GameSerializationType selectedSerializationType = GameSerializationType.FEN;
-	
-	/// <summary>
-	/// Unity's Start method initialises the game and sets up event handlers.
-	/// </summary>
-	public void Start() {
+
+    private NetworkVariable<Side> currentTurn = new NetworkVariable<Side>(
+        Side.White,
+        NetworkVariableReadPermission.Everyone,
+        NetworkVariableWritePermission.Server
+    );
+
+    public Side GetCurrentTurn()
+    {
+        return currentTurn.Value;
+    }
+
+    /// <summary>
+    /// Unity's Start method initialises the game and sets up event handlers.
+    /// </summary>
+    public void Start() {
 		// Subscribe to the event triggered when a visual piece is moved.
 		VisualPiece.VisualPieceMoved += OnPieceMoved;
 
@@ -176,8 +187,8 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
 	/// <param name="move">The move to execute.</param>
 	/// <returns>True if the move was successfully executed; otherwise, false.</returns>
 	private bool TryExecuteMove(Movement move) {
-		// Attempt to execute the move within the game logic.
-		if (!game.TryExecuteMove(move)) {
+        // Attempt to execute the move within the game logic.
+        if (!game.TryExecuteMove(move)) {
 			return false;
 		}
 
@@ -194,12 +205,23 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
 			BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(SideToMove);
 		}
 
-		// Signal that a move has been executed.
-		MoveExecutedEvent?.Invoke();
+        // Signal that a move has been executed.
+        MoveExecutedEvent?.Invoke();
 
-		return true;
+        // Switch turns after a successful move
+        SwitchTurnServerRpc();
+
+        return true;
 	}
-	
+
+	[ServerRpc(RequireOwnership = false)]
+	private void SwitchTurnServerRpc()
+	{
+        currentTurn.Value = currentTurn.Value == Side.White ? Side.Black : Side.White;
+        // Update piece interactability
+        BoardManager.Instance.EnsureOnlyPiecesOfSideAreEnabled(currentTurn.Value);
+    }
+
 	/// <summary>
 	/// Handles special move behaviour asynchronously (castling, en passant, and promotion).
 	/// </summary>
@@ -330,7 +352,7 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
 			movedPieceTransform.parent = closestBoardSquareTransform;
 			movedPieceTransform.position = closestBoardSquareTransform.position;
 		}
-	}
+    }
 
     public bool TryGetLegalMove(Square fromSquare, Square toSquare, out Movement move)
     {
@@ -346,7 +368,7 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
 		return game.TryGetLegalMovesForPiece(piece, out _);
 	}
 
-    [ServerRpc]
+    [ServerRpc(RequireOwnership = false)]
     public void SaveGameStateServerRpc(string gameId)
     {
         if (!IsServer) return;
@@ -374,8 +396,7 @@ public class GameManager : NetworkBehaviourSingleton<GameManager> {
         Debug.Log($"Game {gameId} was saved to the server");
     }
 
-    // Load a game state from Firebase
-    [ServerRpc]
+    [ServerRpc(RequireOwnership = false)]
     public void LoadGameStateServerRpc(string gameId)
     {
         if (!IsServer) return;

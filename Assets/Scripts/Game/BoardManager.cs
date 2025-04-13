@@ -225,17 +225,18 @@ public class BoardManager : NetworkBehaviourSingleton<BoardManager> {
 		foreach (VisualPiece pieceBehaviour in visualPiece) {
 			// Get the corresponding chess piece from the board.
 			Piece piece = GameManager.Instance.CurrentBoard[pieceBehaviour.CurrentSquare];
+			bool canMove = pieceBehaviour.PieceColor == side
+						   && GameManager.Instance.HasLegalMoves(piece);
 			// Enable the piece only if it belongs to the specified side and has legal moves.
-			pieceBehaviour.enabled = pieceBehaviour.PieceColor == side
-			                         && GameManager.Instance.HasLegalMoves(piece);
+			pieceBehaviour.enabled = canMove;
 		}
 	}
 
-	/// <summary>
-	/// Destroys the visual representation of a piece at the specified square.
-	/// </summary>
-	/// <param name="position">The board square from which to destroy the piece.</param>
-	public void TryDestroyVisualPiece(Square position) {
+    /// <summary>
+    /// Destroys the visual representation of a piece at the specified square.
+    /// </summary>
+    /// <param name="position">The board square from which to destroy the piece.</param>
+    public void TryDestroyVisualPiece(Square position) {
 		// Find the VisualPiece component within the square's GameObject.
 		VisualPiece visualPiece = positionMap[position].GetComponentInChildren<VisualPiece>();
 		// If a VisualPiece is found, destroy its GameObject immediately.

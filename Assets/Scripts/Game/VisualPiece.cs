@@ -50,6 +50,32 @@ public class VisualPiece : NetworkBehaviour
         thisTransform = transform;
         // Obtain the main camera from the scene.
         boardCamera = Camera.main;
+
+        //// Disable interaction if this player is not allowed to move this piece
+        //if (!CanPlayerMovePiece())
+        //{
+        //    enabled = false; // Disable this script
+        //}
+    }
+
+    /// <summary>
+    /// Determines whether the current player can move this piece.
+    /// </summary>
+    /// <returns>True if the player can move this piece; otherwise, false.</returns>
+    private bool CanPlayerMovePiece()
+    {
+        Side currentTurn = GameManager.Instance.GetCurrentTurn();
+
+        // Host can only move white pieces; client can only move black pieces
+        if (IsHost)
+        {
+            return PieceColor == Side.White && currentTurn == Side.White;
+        }
+        if (!IsHost && IsClient)
+        {
+            return PieceColor == Side.Black && currentTurn == Side.Black;
+        }
+        return false;
     }
 
     /// <summary>
@@ -58,11 +84,20 @@ public class VisualPiece : NetworkBehaviour
     /// </summary>
     public void OnMouseDown()
     {
-        if (enabled)
+        if (enabled && CanPlayerMovePiece())
         {
             // Convert the world position of the piece to screen-space and store it.
-            piecePositionSS = boardCamera.WorldToScreenPoint(transform.position);
+            Vector3 position = boardCamera.WorldToScreenPoint(transform.position);
+            piecePositionSS.z = position.z;
+            OnMouseDownServerRpc(position.x, position.y);
         }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void OnMouseDownServerRpc(float posX, float posY)
+    {
+        piecePositionSS.x = posX;
+        piecePositionSS.y = posY;
     }
 
     /// <summary>
@@ -71,14 +106,21 @@ public class VisualPiece : NetworkBehaviour
     /// </summary>
     private void OnMouseDrag()
     {
-        if (enabled)
+        if (enabled && CanPlayerMovePiece())
         {
             // Create a new screen-space position based on the current mouse position,
             // preserving the original depth (z-coordinate).
             Vector3 nextPiecePositionSS = new Vector3(Input.mousePosition.x, Input.mousePosition.y, piecePositionSS.z);
             // Convert the screen-space position back to world-space and update the piece's position.
-            thisTransform.position = boardCamera.ScreenToWorldPoint(nextPiecePositionSS);
+            Vector3 position = boardCamera.ScreenToWorldPoint(nextPiecePositionSS);
+            OnMouseDragServerRpc(position);
         }
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void OnMouseDragServerRpc(Vector3 position)
+    {
+        thisTransform.position = position;
     }
 
     /// <summary>
@@ -87,13 +129,13 @@ public class VisualPiece : NetworkBehaviour
     /// </summary>
     public void OnMouseUp()
     {
-        if (enabled)
+        if (enabled && CanPlayerMovePiece())
         {
             MovePieceServerRpc();
         }
     }
 
-    [ServerRpc]
+    [ServerRpc(RequireOwnership = false)]
     private void MovePieceServerRpc()
     {
         // Clear any previous potential landing square candidates.
@@ -130,5 +172,10 @@ public class VisualPiece : NetworkBehaviour
 
         // Raise the VisualPieceMoved event with the initial square, the piece's transform, and the closest square transform.
         VisualPieceMoved?.Invoke(CurrentSquare, thisTransform, closestSquareTransform);
+    }
+
+    public void UpdateInteractability()
+    {
+        enabled = CanPlayerMovePiece();
     }
 }

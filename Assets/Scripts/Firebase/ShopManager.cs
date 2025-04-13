@@ -19,7 +19,6 @@ public class ShopManager : MonoBehaviourSingleton<ShopManager>
     public string userId;
 
     private FirebaseFirestore db;
-    private FirebaseAuth auth;
     private ListenerRegistration purchaseListener;
 
     [SerializeField] private GameObject shop;
@@ -39,9 +38,9 @@ public class ShopManager : MonoBehaviourSingleton<ShopManager>
 
     private void Start()
     {
-        if (string.IsNullOrEmpty(userId) && auth.CurrentUser != null)
+        if (string.IsNullOrEmpty(userId))
         {
-            userId = auth.CurrentUser.UserId;
+            userId = "0";
         }
 
         GetUserPoints(userId);
@@ -55,7 +54,6 @@ public class ShopManager : MonoBehaviourSingleton<ShopManager>
     {
         FirebaseFirestore.DefaultInstance.Settings.PersistenceEnabled = false;
         db = FirebaseFirestore.DefaultInstance;
-        auth = FirebaseAuth.DefaultInstance;
     }
 
     public void ToggleShop()
